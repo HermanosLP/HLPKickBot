@@ -33,7 +33,7 @@ async function generateLeaderboard(outputPath) {
 
   if (!topUsers.length) return null;
 
-  const HEIGHT = HEADER_HEIGHT + topUsers.length * ROW_HEIGHT + PADDING * 2 + 30;
+  const HEIGHT = HEADER_HEIGHT + topUsers.length * ROW_HEIGHT + PADDING * 2 + 50;
   const canvas = createCanvas(WIDTH, HEIGHT);
   const ctx = canvas.getContext("2d");
 

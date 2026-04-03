@@ -6,6 +6,8 @@ const { loadCommands, handleMessage } = require("./commandLoader");
 const { connectDB } = require("./db");
 const UserScore = require("./models/UserScore");
 const { getEarnedRanks, getRankById } = require("./models/Rank");
+const { generateLeaderboard } = require("./utils/leaderboard");
+const { uploadToGitHub } = require("./utils/githubUpload");
 
 async function main() {
   console.log("=== HLPKickBot Baslatiliyor ===\n");
@@ -128,6 +130,24 @@ async function main() {
       console.error("[Bot] Otomatik mesaj gonderilemedi:", err.message);
     }
   }, AUTO_INTERVAL);
+
+  // 7. Leaderboard otomatik guncelleme (30 dakikada bir)
+  const LEADERBOARD_INTERVAL = 30 * 60 * 1000;
+
+  async function updateLeaderboard() {
+    try {
+      const imagePath = await generateLeaderboard();
+      if (imagePath) {
+        await uploadToGitHub(imagePath);
+      }
+    } catch (err) {
+      console.error("[Leaderboard] Guncelleme hatasi:", err.message);
+    }
+  }
+
+  // Baslangicta bir kez calistir
+  updateLeaderboard();
+  setInterval(updateLeaderboard, LEADERBOARD_INTERVAL);
 
   console.log("[Bot] Chat dinleniyor. Cikmak icin CTRL+C\n");
 }
