@@ -1,0 +1,21 @@
+{
+  "name": "hlpkickbot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@nekiro/kick-api": "^2.1.2",
+    "canvas": "^3.2.3",
+    "dotenv": "^17.4.0",
+    "express": "^5.2.1",
+    "mongoose": "^9.3.3",
+    "open": "^11.0.0",
+    "pusher-js": "^8.5.0"
+  }
+}

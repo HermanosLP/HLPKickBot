@@ -1,0 +1,23 @@
+{
+  "kurallar": [
+    "Saygılı ol, burası aile ortamı",
+    "Spoiler atanı yayıncı bizzat banlar",
+    "Spam/reklam yapma, kimse bakmıyor zaten",
+    "Modlar haklıdır, itiraz kabul edilmez :D",
+    "En önemlisi: eğlen, keyif al!"
+  ],
+  "specs": {
+    "CPU": "Ryzen 7 5700X",
+    "GPU": "RTX 5080 16GB",
+    "Anakart": "MSI MPG B550 Gaming Edge Wi-Fi",
+    "RAM": "32GB DDR4",
+    "SSD": "Samsung 970 EVO Plus",
+    "Monitör": "ASUS TUF VG27AQZ (27\" 2K 170Hz)",
+    "Kulaklık": "HyperX Cloud III S Wireless",
+    "Mikrofon": "HyperX Cloud III S Wireless"
+  },
+  "program": {
+    "gunler": "Pazartesi — Cuma",
+    "saat": "22:00 — 02:00"
+  }
+}
