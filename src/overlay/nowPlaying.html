@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<title>Now Playing</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; height: 100%;
+    background: transparent;
+    overflow: hidden;
+    font-family: "Segoe UI", Roboto, system-ui, sans-serif;
+  }
+
+  .wrap {
+    position: fixed;
+    bottom: 30px;
+    left: 30px;
+    transform: translateX(-120%);
+    opacity: 0;
+    transition: transform 600ms cubic-bezier(.22,1,.36,1), opacity 400ms ease;
+  }
+  .wrap.visible { transform: translateX(0); opacity: 1; }
+
+  .card {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 18px 26px 18px 18px;
+    background: rgba(20, 20, 25, 0.85);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+    min-width: 420px;
+    max-width: 620px;
+  }
+
+  .art {
+    width: 84px; height: 84px;
+    border-radius: 12px;
+    background: #222 center/cover no-repeat;
+    flex-shrink: 0;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+  }
+
+  .meta { flex: 1; min-width: 0; color: #fff; }
+
+  .label {
+    display: flex; align-items: center; gap: 7px;
+    font-size: 12px; font-weight: 600;
+    color: #1db954;
+    letter-spacing: 1.6px; text-transform: uppercase;
+    margin-bottom: 5px;
+  }
+  .dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: #1db954;
+    animation: pulse 1.4s infinite ease-in-out;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.4; transform: scale(0.8); }
+  }
+
+  .title {
+    font-size: 20px; font-weight: 700;
+    color: #fff;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    margin-bottom: 3px;
+  }
+  .artist {
+    font-size: 15px; color: #bbb;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .req {
+    margin-top: 8px;
+    font-size: 13px; color: #9b9bff;
+  }
+  .req b { color: #c7c7ff; }
+
+  .bar {
+    margin-top: 12px;
+    height: 4px; background: rgba(255,255,255,0.12);
+    border-radius: 3px; overflow: hidden;
+  }
+  .fill {
+    height: 100%;
+    background: linear-gradient(90deg, #1db954, #4ad47a);
+    width: 0%;
+    transition: width 500ms linear, background 600ms ease;
+  }
+
+  /* Son 10 saniye: fill kırmızıya döner, kart hafif titrer */
+  .wrap.ending .fill {
+    background: linear-gradient(90deg, #ff9800, #ff3b3b);
+    animation: fillPulse 800ms infinite alternate;
+  }
+  @keyframes fillPulse {
+    from { opacity: 0.75; }
+    to   { opacity: 1; }
+  }
+  .wrap.ending .label {
+    color: #ff3b3b;
+  }
+  .wrap.ending .dot {
+    background: #ff3b3b;
+  }
+  .ending-text {
+    display: none;
+    margin-left: 6px;
+    color: #ff3b3b;
+    font-weight: 700;
+  }
+  .wrap.ending .ending-text { display: inline; }
+
+  /* Sıradaki şarkı */
+  .next {
+    display: none;
+    margin-top: 10px;
+    font-size: 12px;
+    color: #888;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .next.show { display: block; }
+  .next .arrow { color: #1db954; margin-right: 6px; font-weight: 700; }
+  .next b { color: #ccc; }
+  .next .nextReq { color: #8484ff; margin-left: 4px; }
+</style>
+</head>
+<body>
+  <div class="wrap" id="wrap">
+    <div class="card">
+      <div class="art" id="art"></div>
+      <div class="meta">
+        <div class="label">
+          <span class="dot"></span>
+          <span>Now Playing</span>
+          <span class="ending-text">• BİTİYOR</span>
+        </div>
+        <div class="title" id="title">—</div>
+        <div class="artist" id="artist">—</div>
+        <div class="req" id="req" style="display:none;">İstek: <b id="reqName"></b></div>
+        <div class="bar"><div class="fill" id="fill"></div></div>
+        <div class="next" id="next">
+          <span class="arrow">⏭</span>Sıradaki: <b id="nextTitle">—</b><span id="nextReq" class="nextReq"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+const POLL_MS = 5000;
+const PROGRESS_TICK_MS = 500;
+const ENDING_THRESHOLD_MS = 10000;
+
+let currentId = null;
+let lastFetchAt = 0;
+let lastFetchProgress = 0;
+let currentDuration = 0;
+let currentIsPlaying = false;
+
+const wrap   = document.getElementById("wrap");
+const art    = document.getElementById("art");
+const title  = document.getElementById("title");
+const artist = document.getElementById("artist");
+const reqEl  = document.getElementById("req");
+const reqNm  = document.getElementById("reqName");
+const fill   = document.getElementById("fill");
+const nextEl = document.getElementById("next");
+const nextTt = document.getElementById("nextTitle");
+const nextRq = document.getElementById("nextReq");
+
+async function poll() {
+  try {
+    const r = await fetch("/api/now-playing", { cache: "no-store" });
+    if (!r.ok) throw new Error(r.status);
+    const d = await r.json();
+
+    if (!d.playing) {
+      hide();
+      currentId = null;
+      return;
+    }
+
+    if (d.id !== currentId) {
+      currentId = d.id;
+      flashNew(d);
+    } else {
+      syncProgressState(d);
+      updateNext(d);
+    }
+  } catch (e) {}
+}
+
+function flashNew(d) {
+  wrap.classList.remove("visible", "ending");
+  setTimeout(() => {
+    title.textContent  = d.name || "—";
+    artist.textContent = d.artists || "—";
+    art.style.backgroundImage = d.albumArt ? `url("${d.albumArt}")` : "";
+    if (d.requester) { reqNm.textContent = d.requester; reqEl.style.display = "block"; }
+    else { reqEl.style.display = "none"; }
+    syncProgressState(d);
+    updateNext(d);
+    wrap.classList.add("visible");
+  }, 300);
+}
+
+function syncProgressState(d) {
+  lastFetchAt = Date.now();
+  lastFetchProgress = d.progressMs || 0;
+  currentDuration = d.durationMs || 0;
+  currentIsPlaying = !!d.isPlaying;
+}
+
+function updateNext(d) {
+  if (d.next && d.next.name) {
+    nextTt.textContent = `${d.next.name} — ${d.next.artists || ""}`;
+    nextRq.textContent = d.next.requester ? `(${d.next.requester})` : "";
+    nextEl.classList.add("show");
+  } else {
+    nextEl.classList.remove("show");
+  }
+}
+
+function tickProgress() {
+  if (!currentDuration) return;
+  const elapsed = currentIsPlaying ? (Date.now() - lastFetchAt) : 0;
+  const progress = Math.min(currentDuration, lastFetchProgress + elapsed);
+  fill.style.width = (progress / currentDuration) * 100 + "%";
+
+  const remaining = currentDuration - progress;
+  if (remaining <= ENDING_THRESHOLD_MS && remaining > 0) {
+    wrap.classList.add("ending");
+  } else {
+    wrap.classList.remove("ending");
+  }
+}
+
+function hide() { wrap.classList.remove("visible", "ending"); }
+
+poll();
+setInterval(poll, POLL_MS);
+setInterval(tickProgress, PROGRESS_TICK_MS);
+</script>
+</body>
+</html>

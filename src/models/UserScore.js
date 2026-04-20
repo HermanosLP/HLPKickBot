@@ -10,6 +10,13 @@ const userScoreSchema = new mongoose.Schema({
   dailyStreak: { type: Number, default: 0 },
   earnedRanks: { type: [Number], default: [0] },
   selectedRank: { type: Number, default: 0 },
+  coins: { type: Number, default: 0 },
+  lastCoinEarnedAt: { type: Date, default: null },
+  followRewardClaimed: { type: Boolean, default: false },
+  contact: { type: String, default: "" },
+  linkOffenses: { type: Number, default: 0 },
+  lastLinkOffenseAt: { type: Date, default: null },
+  lastSongRequestAt: { type: Date, default: null },
 });
 
 // Her seviye icin gereken XP: seviye * 100

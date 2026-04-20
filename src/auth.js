@@ -51,6 +51,8 @@ async function authenticate(kickClient) {
       "chat:write",
       "chat:read",
       "channel:read",
+      "moderation:ban",
+      "events:subscribe",
     ]);
 
     app.get("/callback", async (req, res) => {
