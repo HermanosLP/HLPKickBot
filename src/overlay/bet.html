@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<title>HLP Tahmin Overlay</title>
+<style>
+  :root {
+    --red: #c82828;
+    --red-glow: rgba(200,40,40,0.8);
+    --green: #2ea043;
+    --green-glow: rgba(46,160,67,0.8);
+    --dark: #0b0303;
+    --panel: rgba(15, 5, 5, 0.92);
+    --text: #f5f5f5;
+    --accent: #ffb700;
+    --muted: #a0a0a0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100vw; height: 100vh;
+    background: transparent;
+    font-family: "Segoe UI", "Arial", sans-serif;
+    color: var(--text);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  #wrap {
+    position: fixed;
+    top: 40px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-150%);
+    width: 760px;
+    background: var(--panel);
+    border: 2px solid var(--red);
+    border-radius: 14px;
+    padding: 18px 26px 22px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.6), 0 0 30px rgba(200,40,40,0.4), inset 0 0 20px rgba(200,40,40,0.1);
+    transition: transform 0.6s cubic-bezier(0.34, 1.3, 0.64, 1), opacity 0.4s;
+    opacity: 0;
+    backdrop-filter: blur(6px);
+    will-change: transform, opacity;
+  }
+  #wrap.visible {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+  }
+
+  #header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  #label {
+    font-size: 12px;
+    letter-spacing: 3px;
+    color: var(--accent);
+    text-transform: uppercase;
+    font-weight: 700;
+  }
+  #timer {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+    min-width: 70px;
+    text-align: right;
+  }
+  #timer.warn { color: #ff7b00; }
+  #timer.danger { color: var(--red); animation: pulse 1s infinite; }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  #question {
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1.3;
+    margin-bottom: 18px;
+    color: #fff;
+    text-shadow: 0 2px 6px rgba(0,0,0,0.8);
+  }
+
+  .side {
+    margin-bottom: 12px;
+  }
+  .side:last-child { margin-bottom: 0; }
+
+  .side-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 6px;
+    font-size: 14px;
+  }
+  .side-name {
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .side.evet .side-name { color: var(--green); }
+  .side.hayir .side-name { color: var(--red); }
+
+  .side-stats {
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .side-stats .coins {
+    color: var(--accent);
+    font-weight: 700;
+  }
+  .side-stats .pct {
+    color: #fff;
+    font-weight: 700;
+    margin-left: 8px;
+  }
+
+  .bar-bg {
+    width: 100%;
+    height: 22px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 11px;
+    overflow: hidden;
+    position: relative;
+  }
+  .bar-fill {
+    height: 100%;
+    width: 0%;
+    border-radius: 11px;
+    transition: width 0.7s cubic-bezier(0.25, 0.8, 0.25, 1);
+    position: relative;
+  }
+  .side.evet .bar-fill {
+    background: linear-gradient(90deg, #1a7a2e, var(--green));
+    box-shadow: 0 0 12px var(--green-glow);
+  }
+  .side.hayir .bar-fill {
+    background: linear-gradient(90deg, #8a1d1d, var(--red));
+    box-shadow: 0 0 12px var(--red-glow);
+  }
+  .bar-fill.pulse::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: rgba(255,255,255,0.5);
+    animation: pulseFade 0.6s ease-out;
+  }
+  @keyframes pulseFade {
+    from { opacity: 1; }
+    to   { opacity: 0; }
+  }
+
+  #footer {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  #pot .val {
+    color: var(--accent);
+    font-weight: 700;
+    font-size: 16px;
+  }
+  #cmdhint {
+    font-size: 12px;
+    letter-spacing: 1px;
+    opacity: 0.8;
+  }
+  #cmdhint .evet { color: var(--green); font-weight: 700; }
+  #cmdhint .hayir { color: var(--red); font-weight: 700; }
+
+  /* Son bahis flash */
+  #lastbet {
+    position: absolute;
+    right: 26px;
+    top: -14px;
+    padding: 6px 12px;
+    background: var(--accent);
+    color: var(--dark);
+    font-size: 12px;
+    font-weight: 700;
+    border-radius: 6px;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.3s, transform 0.3s;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  }
+  #lastbet.show {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* Settle ekrani */
+  #settle {
+    position: absolute;
+    inset: 0;
+    background: rgba(11, 3, 3, 0.97);
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.5s;
+  }
+  #settle.visible { opacity: 1; }
+  #settle .trophy {
+    font-size: 64px;
+    margin-bottom: 8px;
+    filter: drop-shadow(0 0 12px var(--accent));
+  }
+  #settle .title {
+    font-size: 14px;
+    letter-spacing: 4px;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  #settle .winner {
+    font-size: 42px;
+    font-weight: 800;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    text-shadow: 0 0 20px currentColor;
+  }
+  #settle .winner.evet  { color: var(--green); }
+  #settle .winner.hayir { color: var(--red); }
+  #settle .details {
+    font-size: 16px;
+    color: #ddd;
+  }
+  #settle .details .val {
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+</style>
+</head>
+<body>
+  <div id="wrap">
+    <div id="lastbet"></div>
+    <div id="header">
+      <div id="label">🎯 Canli Tahmin</div>
+      <div id="timer">--:--</div>
+    </div>
+    <div id="question">—</div>
+
+    <div class="side evet">
+      <div class="side-header">
+        <div class="side-name">✓ Evet</div>
+        <div class="side-stats">
+          <span class="coins" data-bind="evet-coins">0</span> 🪙
+          · <span data-bind="evet-count">0</span> kişi
+          <span class="pct" data-bind="evet-pct">0%</span>
+        </div>
+      </div>
+      <div class="bar-bg"><div class="bar-fill" data-bind="evet-bar"></div></div>
+    </div>
+
+    <div class="side hayir">
+      <div class="side-header">
+        <div class="side-name">✗ Hayır</div>
+        <div class="side-stats">
+          <span class="coins" data-bind="hayir-coins">0</span> 🪙
+          · <span data-bind="hayir-count">0</span> kişi
+          <span class="pct" data-bind="hayir-pct">0%</span>
+        </div>
+      </div>
+      <div class="bar-bg"><div class="bar-fill" data-bind="hayir-bar"></div></div>
+    </div>
+
+    <div id="footer">
+      <div id="pot">Toplam Coin: <span class="val" data-bind="pot">0</span> 🪙</div>
+      <div id="cmdhint">!<span class="evet">evet</span> &lt;coin&gt; · !<span class="hayir">hayır</span> &lt;coin&gt;</div>
+    </div>
+
+    <div id="settle">
+      <div class="trophy">🏆</div>
+      <div class="title">Kazanan</div>
+      <div class="winner" data-bind="winner">—</div>
+      <div class="details">
+        Ödül: <span class="val" data-bind="settle-pot">0</span> 🪙
+        · Oran: <span class="val" data-bind="settle-mult">x0</span>
+        · <span class="val" data-bind="settle-winners">0</span> kişi kazandı
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const $ = (name) => document.querySelector(`[data-bind="${name}"]`);
+  const wrap = document.getElementById("wrap");
+  const settle = document.getElementById("settle");
+  const timer = document.getElementById("timer");
+  const lastbet = document.getElementById("lastbet");
+
+  let currentBetId = null;
+  let closesAt = null;
+  let tickInterval = null;
+  let hideTimeout = null;
+
+  function show() {
+    wrap.classList.add("visible");
+    if (hideTimeout) { clearTimeout(hideTimeout); hideTimeout = null; }
+  }
+  function hide(delay = 0) {
+    if (hideTimeout) clearTimeout(hideTimeout);
+    hideTimeout = setTimeout(() => {
+      wrap.classList.remove("visible");
+      settle.classList.remove("visible");
+      stopTimer();
+    }, delay);
+  }
+
+  function setQuestion(q) {
+    document.getElementById("question").textContent = q || "—";
+  }
+
+  function setTotals(evet, hayir, evetCount, hayirCount, lastSide) {
+    const total = (evet || 0) + (hayir || 0);
+    const evetPct = total === 0 ? 50 : Math.round((evet / total) * 100);
+    const hayirPct = total === 0 ? 50 : 100 - evetPct;
+
+    $("evet-coins").textContent = fmt(evet);
+    $("hayir-coins").textContent = fmt(hayir);
+    $("evet-count").textContent = evetCount || 0;
+    $("hayir-count").textContent = hayirCount || 0;
+    $("evet-pct").textContent = total === 0 ? "—" : `%${evetPct}`;
+    $("hayir-pct").textContent = total === 0 ? "—" : `%${hayirPct}`;
+    $("evet-bar").style.width = `${evetPct}%`;
+    $("hayir-bar").style.width = `${hayirPct}%`;
+    $("pot").textContent = fmt(total);
+
+    if (lastSide) {
+      const bar = lastSide === "evet" ? $("evet-bar") : $("hayir-bar");
+      bar.classList.remove("pulse");
+      void bar.offsetWidth;
+      bar.classList.add("pulse");
+    }
+  }
+
+  function flashLastBet(lastBet) {
+    if (!lastBet) return;
+    const sideLabel = lastBet.side === "evet" ? "EVET" : "HAYIR";
+    lastbet.innerHTML = `@${escapeHtml(lastBet.username)} +${lastBet.amount} → ${sideLabel}`;
+    lastbet.classList.remove("show");
+    void lastbet.offsetWidth;
+    lastbet.classList.add("show");
+    setTimeout(() => lastbet.classList.remove("show"), 2500);
+  }
+
+  function startTimer(closesAtIso) {
+    closesAt = new Date(closesAtIso).getTime();
+    stopTimer();
+    tickTimer();
+    tickInterval = setInterval(tickTimer, 500);
+  }
+  function stopTimer() {
+    if (tickInterval) clearInterval(tickInterval);
+    tickInterval = null;
+  }
+  function tickTimer() {
+    if (!closesAt) return;
+    const diff = Math.max(0, closesAt - Date.now());
+    const mm = Math.floor(diff / 60000);
+    const ss = Math.floor((diff % 60000) / 1000);
+    timer.textContent = `${String(mm).padStart(2,"0")}:${String(ss).padStart(2,"0")}`;
+    timer.classList.remove("warn", "danger");
+    if (diff <= 10000) timer.classList.add("danger");
+    else if (diff <= 30000) timer.classList.add("warn");
+    if (diff <= 0) stopTimer();
+  }
+
+  function fmt(n) {
+    return (n || 0).toLocaleString("tr-TR");
+  }
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    })[c]);
+  }
+
+  // Event handlers
+  const handlers = {
+    "bet:open": (d) => {
+      currentBetId = d.betId;
+      settle.classList.remove("visible");
+      setQuestion(d.question);
+      setTotals(0, 0, 0, 0);
+      startTimer(d.closesAt);
+      show();
+    },
+    "bet:update": (d) => {
+      if (currentBetId && d.betId && d.betId !== currentBetId) return;
+      currentBetId = d.betId || currentBetId;
+      setQuestion(d.question);
+      setTotals(d.evet, d.hayır, d.evetCount, d.hayırCount, d.lastBet?.side);
+      if (d.closesAt) startTimer(d.closesAt);
+      flashLastBet(d.lastBet);
+      show();
+    },
+    "bet:close": (d) => {
+      if (currentBetId && d.betId !== currentBetId) return;
+      setTotals(d.evet, d.hayır, d.evetCount, d.hayırCount);
+      timer.textContent = "KAPALI";
+      timer.classList.remove("warn", "danger");
+      stopTimer();
+      // 3 saniye "KAPALI" gosterdikten sonra paneli slide-out ile gizle
+      hide(3000);
+    },
+    "bet:settle": (d) => {
+      if (currentBetId && d.betId !== currentBetId) return;
+      // Panel gizliyse geri slide-in et
+      show();
+      settle.querySelector(".title").textContent = "Kazanan";
+      const winnerEl = $("winner");
+      winnerEl.textContent = (d.outcome || "").toUpperCase();
+      winnerEl.className = `winner ${d.outcome === "evet" ? "evet" : "hayir"}`;
+      $("settle-pot").textContent = fmt(d.pot);
+      $("settle-mult").textContent = `x${(d.multiplier || 0).toFixed(2)}`;
+      $("settle-winners").textContent = (d.winners || []).length;
+      // Panel animasyonla girsin, sonra settle overlay fade-in olsun
+      setTimeout(() => settle.classList.add("visible"), 500);
+      stopTimer();
+      hide(8500);
+      currentBetId = null;
+    },
+    "bet:cancel": (d) => {
+      if (currentBetId && d.betId !== currentBetId) return;
+      show();
+      settle.querySelector(".title").textContent = "Tahmin Iptal Edildi";
+      const winnerEl = $("winner");
+      winnerEl.textContent = "IPTAL";
+      winnerEl.className = "winner";
+      $("settle-pot").textContent = "—";
+      $("settle-mult").textContent = "—";
+      $("settle-winners").textContent = "—";
+      setTimeout(() => settle.classList.add("visible"), 500);
+      stopTimer();
+      hide(5500);
+      currentBetId = null;
+    },
+  };
+
+  // Initial state yukle (sayfa acildiginda mevcut bahis varsa goster)
+  async function loadCurrent() {
+    try {
+      const res = await fetch("/api/bet/current");
+      const data = await res.json();
+      if (data.active) {
+        currentBetId = data.betId;
+        setQuestion(data.question);
+        setTotals(data.evet, data.hayır, data.evetCount, data.hayırCount);
+        if (data.status === "open") {
+          startTimer(data.closesAt);
+        } else {
+          timer.textContent = "KAPALI";
+        }
+        show();
+      }
+    } catch (err) {
+      console.warn("[Bet] Initial state yuklenemedi:", err);
+    }
+  }
+
+  // WebSocket
+  let ws = null;
+  let reconnectDelay = 1000;
+
+  function connect() {
+    const proto = location.protocol === "https:" ? "wss:" : "ws:";
+    const host = location.host || "localhost:3000";
+    const url = `${proto}//${host}/events`;
+
+    ws = new WebSocket(url);
+
+    ws.addEventListener("open", () => {
+      reconnectDelay = 1000;
+      loadCurrent();
+    });
+
+    ws.addEventListener("message", (evt) => {
+      try {
+        const { type, data } = JSON.parse(evt.data);
+        const fn = handlers[type];
+        if (fn) fn(data || {});
+      } catch (err) {
+        console.warn("[WS] Parse hatasi:", err);
+      }
+    });
+
+    ws.addEventListener("close", () => {
+      setTimeout(connect, reconnectDelay);
+      reconnectDelay = Math.min(reconnectDelay * 1.5, 15000);
+    });
+
+    ws.addEventListener("error", () => {
+      try { ws.close(); } catch (_) {}
+    });
+  }
+
+  connect();
+})();
+</script>
+</body>
+</html>

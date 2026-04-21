@@ -1,6 +1,7 @@
 const Bet = require("../../models/Bet");
 const UserScore = require("../../models/UserScore");
 const { isMod } = require("../../utils/modCheck");
+const eventBus = require("../../events/EventBus");
 
 module.exports = {
   name: "bahissonuc",
@@ -28,6 +29,17 @@ module.exports = {
     await bet.save();
 
     if (pot === 0) {
+      eventBus.emit("bet:settle", {
+        betId: String(bet._id),
+        question: bet.question,
+        outcome,
+        pot: 0,
+        evet,
+        hayır,
+        winners: [],
+        multiplier: 0,
+        refunded: false,
+      });
       return `🏆 Sonuç: ${outcome.toUpperCase()} kazandı — ama kimse bahis yapmadı.`;
     }
 
@@ -40,11 +52,23 @@ module.exports = {
           await user.save();
         }
       }
+      eventBus.emit("bet:settle", {
+        betId: String(bet._id),
+        question: bet.question,
+        outcome,
+        pot,
+        evet,
+        hayır,
+        winners: [],
+        multiplier: 0,
+        refunded: true,
+      });
       return `🏆 Sonuç: ${outcome.toUpperCase()} kazandı — ama kazanan tarafta kimse yoktu. Tüm bahisler iade edildi.`;
     }
 
     // Pari-mutuel payout: her kazanan oraniyla havuzdan pay alir
     const winners = bet.bets.filter((b) => b.side === outcome);
+    const winnersPayload = [];
     for (const w of winners) {
       const share = Math.floor((w.amount / winnerTotal) * pot);
       const user = await UserScore.findOne({ userId: w.userId });
@@ -52,9 +76,23 @@ module.exports = {
         user.coins = (user.coins || 0) + share;
         await user.save();
       }
+      winnersPayload.push({ username: w.username, amount: w.amount, share });
     }
 
     const oran = (pot / winnerTotal).toFixed(2);
+
+    eventBus.emit("bet:settle", {
+      betId: String(bet._id),
+      question: bet.question,
+      outcome,
+      pot,
+      evet,
+      hayır,
+      winners: winnersPayload,
+      multiplier: Number(oran),
+      refunded: false,
+    });
+
     return `🏆 Sonuç: ${outcome.toUpperCase()} kazandı! | Havuz: ${pot} 🪙 | Kazanan oran: x${oran} | ${winners.length} kişi kazandı, ${loserTotal} 🪙 paylaşıldı.`;
   },
 };

@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<title>HLP Alerts</title>
+<style>
+  :root {
+    --umbrella-red: #c82828;
+    --umbrella-dark: #1a0606;
+    --text: #f0f0f0;
+    --accent: #ffb700;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100vw; height: 100vh;
+    background: transparent;
+    font-family: "Segoe UI", "Arial", sans-serif;
+    color: var(--text);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  #stage {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+  .alert {
+    position: absolute;
+    min-width: 420px;
+    max-width: 720px;
+    padding: 20px 32px;
+    background: linear-gradient(135deg, rgba(26,6,6,0.95), rgba(50,10,10,0.95));
+    border: 2px solid var(--umbrella-red);
+    border-radius: 12px;
+    box-shadow: 0 0 40px rgba(200,40,40,0.6), inset 0 0 20px rgba(200,40,40,0.2);
+    text-align: center;
+    transform: translateY(-80px) scale(0.9);
+    opacity: 0;
+    transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s;
+    will-change: transform, opacity;
+  }
+  .alert.show {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+  .alert .icon {
+    font-size: 48px;
+    display: block;
+    margin-bottom: 8px;
+    filter: drop-shadow(0 0 8px var(--umbrella-red));
+  }
+  .alert .title {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 6px;
+  }
+  .alert .body {
+    font-size: 28px;
+    font-weight: 600;
+    color: #fff;
+  }
+  .alert .body .name {
+    color: var(--umbrella-red);
+    text-shadow: 0 0 12px rgba(200,40,40,0.8);
+  }
+  .alert .sub {
+    margin-top: 8px;
+    font-size: 16px;
+    opacity: 0.85;
+  }
+
+  /* Baglanti durumu */
+  #status {
+    position: fixed;
+    top: 8px;
+    right: 8px;
+    font-size: 11px;
+    padding: 4px 8px;
+    background: rgba(0,0,0,0.5);
+    border-radius: 4px;
+    opacity: 0.4;
+  }
+  #status.ok { color: #4ade80; }
+  #status.off { color: #f87171; }
+</style>
+</head>
+<body>
+  <div id="stage"></div>
+  <div id="status" class="off">● offline</div>
+
+<script>
+(() => {
+  const stage = document.getElementById("stage");
+  const statusEl = document.getElementById("status");
+
+  const handlers = {
+    follow: (d) => showAlert({
+      icon: "💚",
+      title: "YENI TAKIPCI",
+      body: `<span class="name">@${escapeHtml(d.username || "?")}</span> takip etti`,
+      sub: d.reward ? `+${d.reward} 🪙 ödül aldı` : "",
+    }),
+    levelup: (d) => showAlert({
+      icon: "⭐",
+      title: "SEVIYE ATLADI",
+      body: `<span class="name">@${escapeHtml(d.username || "?")}</span> Lv ${d.newLevel || "?"}`,
+      sub: d.coinBonus ? `+${d.coinBonus} 🪙 bonus` : "",
+    }),
+    rankup: (d) => showAlert({
+      icon: d.emoji || "☣️",
+      title: "YENI RUTBE",
+      body: `<span class="name">@${escapeHtml(d.username || "?")}</span> → ${escapeHtml(d.rankName || "?")}`,
+      sub: `Seviye ${d.level || "?"}`,
+    }),
+    "drop:start": (d) => showAlert({
+      icon: "💰",
+      title: "COIN DROP",
+      body: `${d.amount || "?"} 🪙 havaya atildi!`,
+      sub: "!topla yaz - ilk yakalayan alir",
+    }),
+    "drop:catch": (d) => showAlert({
+      icon: "🪙",
+      title: "COIN KAPILDI",
+      body: `<span class="name">@${escapeHtml(d.username || "?")}</span> ${d.amount || "?"} 🪙`,
+      sub: "kapti!",
+    }),
+  };
+
+  const queue = [];
+  let playing = false;
+
+  function showAlert(content) {
+    queue.push(content);
+    if (!playing) runQueue();
+  }
+
+  function runQueue() {
+    if (!queue.length) { playing = false; return; }
+    playing = true;
+    const content = queue.shift();
+
+    const el = document.createElement("div");
+    el.className = "alert";
+    el.innerHTML = `
+      <span class="icon">${content.icon}</span>
+      <div class="title">${content.title}</div>
+      <div class="body">${content.body}</div>
+      ${content.sub ? `<div class="sub">${content.sub}</div>` : ""}
+    `;
+    stage.appendChild(el);
+
+    requestAnimationFrame(() => el.classList.add("show"));
+
+    setTimeout(() => {
+      el.classList.remove("show");
+      setTimeout(() => {
+        el.remove();
+        runQueue();
+      }, 500);
+    }, 4500);
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    })[c]);
+  }
+
+  // WebSocket client
+  let ws = null;
+  let reconnectDelay = 1000;
+
+  function connect() {
+    const proto = location.protocol === "https:" ? "wss:" : "ws:";
+    const host = location.host || "localhost:3000";
+    const url = `${proto}//${host}/events`;
+
+    ws = new WebSocket(url);
+
+    ws.addEventListener("open", () => {
+      statusEl.textContent = "● online";
+      statusEl.className = "ok";
+      reconnectDelay = 1000;
+    });
+
+    ws.addEventListener("message", (evt) => {
+      try {
+        const { type, data } = JSON.parse(evt.data);
+        const fn = handlers[type];
+        if (fn) fn(data || {});
+      } catch (err) {
+        console.warn("[WS] Parse hatasi:", err);
+      }
+    });
+
+    ws.addEventListener("close", () => {
+      statusEl.textContent = "● offline";
+      statusEl.className = "off";
+      setTimeout(connect, reconnectDelay);
+      reconnectDelay = Math.min(reconnectDelay * 1.5, 15000);
+    });
+
+    ws.addEventListener("error", () => {
+      try { ws.close(); } catch (_) {}
+    });
+  }
+
+  connect();
+})();
+</script>
+</body>
+</html>

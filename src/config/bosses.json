@@ -1,0 +1,88 @@
+{
+  "tiers": {
+    "zombie": {
+      "name": "Zombie",
+      "emoji": "🧟",
+      "image": "/assets/bosses/zombie.png",
+      "color": "#6a9a4a",
+      "tier": 1,
+      "maxHp": 1500,
+      "timeLimit": 300,
+      "maxCoinsPerAttack": 30,
+      "minCoinsPerAttack": 10,
+      "minUniqueAttackers": 3,
+      "damagePerCoin": { "min": 1, "max": 3 }
+    },
+    "licker": {
+      "name": "Licker",
+      "emoji": "👅",
+      "image": "/assets/bosses/licker.png",
+      "color": "#c04040",
+      "tier": 2,
+      "maxHp": 4000,
+      "timeLimit": 480,
+      "maxCoinsPerAttack": 50,
+      "minCoinsPerAttack": 15,
+      "minUniqueAttackers": 4,
+      "damagePerCoin": { "min": 1, "max": 3 }
+    },
+    "tyrant": {
+      "name": "Tyrant",
+      "emoji": "🧟‍♂️",
+      "image": "/assets/bosses/mrx.png",
+      "color": "#b87333",
+      "tier": 3,
+      "maxHp": 10000,
+      "timeLimit": 720,
+      "maxCoinsPerAttack": 75,
+      "minCoinsPerAttack": 20,
+      "minUniqueAttackers": 5,
+      "damagePerCoin": { "min": 1, "max": 3 }
+    },
+    "nemesis": {
+      "name": "Nemesis",
+      "emoji": "👹",
+      "image": "/assets/bosses/nemesis.png",
+      "color": "#c82828",
+      "tier": 4,
+      "maxHp": 25000,
+      "timeLimit": 900,
+      "maxCoinsPerAttack": 100,
+      "minCoinsPerAttack": 30,
+      "minUniqueAttackers": 7,
+      "damagePerCoin": { "min": 1, "max": 3 }
+    },
+    "wesker": {
+      "name": "Wesker",
+      "emoji": "💀",
+      "image": "/assets/bosses/wesker.png",
+      "color": "#2a2a2a",
+      "tier": 5,
+      "maxHp": 60000,
+      "timeLimit": 1200,
+      "maxCoinsPerAttack": 150,
+      "minCoinsPerAttack": 50,
+      "minUniqueAttackers": 10,
+      "damagePerCoin": { "min": 1, "max": 3 }
+    }
+  },
+  "combat": {
+    "critChance": 0.10,
+    "critMultiplier": 2,
+    "panicHpThreshold": 0.20,
+    "panicDamageBonus": 0.10,
+    "attackCooldownMs": 30000,
+    "levelBonuses": [
+      { "minLevel": 80, "bonus": 0.20 },
+      { "minLevel": 50, "bonus": 0.10 }
+    ]
+  },
+  "rewards": {
+    "potMultiplier": 1.5,
+    "first": 0.25,
+    "second": 0.15,
+    "third": 0.10,
+    "participantsShare": 0.50,
+    "consolationXP": 30
+  }
+}

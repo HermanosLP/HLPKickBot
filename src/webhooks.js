@@ -3,6 +3,10 @@ const crypto = require("crypto");
 const path = require("path");
 const { getCurrentTrack, getQueue } = require("./utils/spotify");
 const { getRequester } = require("./utils/songRequests");
+const { attachWSServer, BROADCAST_EVENTS } = require("./events/WSServer");
+const eventBus = require("./events/EventBus");
+const Bet = require("./models/Bet");
+const Boss = require("./models/Boss");
 
 let kickPublicKey = null;
 
@@ -39,10 +43,90 @@ async function startWebhookServer({ port = 3000, onFollow }) {
 
   const app = express();
 
+  app.use("/assets", express.static(path.join(__dirname, "overlay", "assets"), {
+    maxAge: "1d",
+    fallthrough: false,
+  }));
+
   app.get("/webhook/health", (req, res) => res.status(200).send("OK"));
 
   app.get("/overlay/now-playing", (req, res) => {
     res.sendFile(path.join(__dirname, "overlay", "nowPlaying.html"));
+  });
+
+  app.get("/overlay/alerts", (req, res) => {
+    res.sendFile(path.join(__dirname, "overlay", "alerts.html"));
+  });
+
+  app.get("/overlay/bet", (req, res) => {
+    res.sendFile(path.join(__dirname, "overlay", "bet.html"));
+  });
+
+  app.get("/overlay/boss", (req, res) => {
+    res.sendFile(path.join(__dirname, "overlay", "boss.html"));
+  });
+
+  app.get("/api/boss/current", async (req, res) => {
+    try {
+      const boss = await Boss.findOne({ status: "active" }).sort({ spawnedAt: -1 });
+      if (!boss) return res.json({ active: false });
+      const s = boss.stats();
+      res.json({
+        active: true,
+        bossId: String(boss._id),
+        name: boss.name,
+        emoji: boss.emoji,
+        image: boss.image,
+        color: boss.color,
+        tier: boss.tier,
+        maxHp: boss.maxHp,
+        currentHp: boss.currentHp,
+        timeLimit: boss.timeLimit,
+        maxCoinsPerAttack: boss.maxCoinsPerAttack,
+        minCoinsPerAttack: boss.minCoinsPerAttack,
+        minUniqueAttackers: boss.minUniqueAttackers,
+        expiresAt: boss.expiresAt.toISOString(),
+        uniqueAttackers: s.uniqueAttackers,
+        totalCoins: s.totalCoins,
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Overlay yuklendiginde / yeniden baglandiginda mevcut bahis durumunu cekmek icin
+  app.get("/api/bet/current", async (req, res) => {
+    try {
+      const bet = await Bet.findOne({ status: { $in: ["open", "closed"] } }).sort({ createdAt: -1 });
+      if (!bet) return res.json({ active: false });
+      const t = bet.totals();
+      res.json({
+        active: true,
+        betId: String(bet._id),
+        question: bet.question,
+        status: bet.status,
+        createdAt: bet.createdAt.toISOString(),
+        closesAt: bet.closesAt.toISOString(),
+        evet: t.evet,
+        hayır: t.hayır,
+        evetCount: t.evetCount,
+        hayırCount: t.hayırCount,
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Test icin event tetikleme: GET /api/test-event?type=follow&username=test
+  app.get("/api/test-event", (req, res) => {
+    const type = String(req.query.type || "");
+    if (!BROADCAST_EVENTS.includes(type)) {
+      return res.status(400).json({ error: "Gecersiz event tipi", allowed: BROADCAST_EVENTS });
+    }
+    const data = { ...req.query };
+    delete data.type;
+    eventBus.emit(type, data);
+    res.json({ ok: true, type, data });
   });
 
   let trackCache = { at: 0, payload: null };
@@ -125,6 +209,7 @@ async function startWebhookServer({ port = 3000, onFollow }) {
   return new Promise((resolve, reject) => {
     const server = app.listen(port, () => {
       console.log(`[Webhook] Sunucu ${port} portunda dinleniyor (/webhook/kick).`);
+      attachWSServer(server, { path: "/events" });
       resolve(server);
     });
     server.on("error", reject);

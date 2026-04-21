@@ -15,6 +15,9 @@ const { startWebhookServer } = require("./webhooks");
 const { startStreamPolling, isLive } = require("./utils/streamStatus");
 const { createDrop, hasActiveDrop, generateDropAmount } = require("./utils/coinDrop");
 const Bet = require("./models/Bet");
+const Boss = require("./models/Boss");
+const bossConfig = require("./config/bosses.json");
+const eventBus = require("./events/EventBus");
 
 const FOLLOW_REWARD_COINS = 100;
 
@@ -57,6 +60,12 @@ async function main() {
     await user.save();
 
     console.log(`[Follow] ${username} +${FOLLOW_REWARD_COINS} coin aldi.`);
+
+    eventBus.emit("follow", {
+      userId,
+      username,
+      reward: FOLLOW_REWARD_COINS,
+    });
   }
 
   try {
@@ -180,6 +189,25 @@ async function main() {
       }
       if (newRanks.length) await user.save();
 
+      eventBus.emit("levelup", {
+        userId: msg.userId,
+        username: msg.username,
+        oldLevel,
+        newLevel: user.level,
+        coinBonus: levelUpCoinBonus,
+      });
+
+      for (const rank of newRanks) {
+        eventBus.emit("rankup", {
+          userId: msg.userId,
+          username: msg.username,
+          rankId: rank.id,
+          rankName: rank.name,
+          emoji: rank.emoji,
+          level: user.level,
+        });
+      }
+
       try {
         await kickClient.chat.postMessage({
           type: "bot",
@@ -289,6 +317,16 @@ async function main() {
       await bet.save();
 
       const { evet, hayır, evetCount, hayırCount } = bet.totals();
+
+      eventBus.emit("bet:close", {
+        betId: String(bet._id),
+        question: bet.question,
+        evet,
+        hayır,
+        evetCount,
+        hayırCount,
+      });
+
       await kickClient.chat.postMessage({
         type: "bot",
         content: `⏰ Bahis kapandı! "${bet.question}" | Evet: ${evet} 🪙 (${evetCount}) / Hayır: ${hayır} 🪙 (${hayırCount}) | Sonuç bekleniyor...`,
@@ -298,6 +336,56 @@ async function main() {
       console.error("[Bahis] Kapanis kontrolu hatasi:", err.message);
     }
   }, BET_CHECK_INTERVAL);
+
+  // 6.7. Boss timeout kontrolu (her 30 sn, suresi dolan aktif boss'u kaçırır)
+  const BOSS_CHECK_INTERVAL = 30 * 1000;
+
+  setInterval(async () => {
+    try {
+      const boss = await Boss.findOne({ status: "active" });
+      if (!boss) return;
+      if (new Date() <= boss.expiresAt) return;
+
+      const stats = boss.stats();
+      boss.status = "expired";
+      boss.resolvedAt = new Date();
+      await boss.save();
+
+      const consolationXP = bossConfig.rewards.consolationXP || 0;
+      if (consolationXP > 0) {
+        for (const info of stats.damageByUser.values()) {
+          const user = await UserScore.findOne({ userId: info.userId });
+          if (user) {
+            user.addXP(consolationXP);
+            await user.save();
+          }
+        }
+      }
+
+      eventBus.emit("boss:expire", {
+        bossId: String(boss._id),
+        name: boss.name,
+        emoji: boss.emoji,
+        tier: boss.tier,
+        uniqueAttackers: stats.uniqueAttackers,
+        totalDamage: stats.totalDamage,
+        consolationXP,
+        reason: "timeout",
+      });
+
+      try {
+        await kickClient.chat.postMessage({
+          type: "bot",
+          content: `💨 ${boss.emoji} ${boss.name} kaçtı! Süre bitti. ${stats.uniqueAttackers} katılımcıya +${consolationXP} XP teselli.`,
+        });
+      } catch (err) {
+        console.error("[Boss] Kaçış mesaji gonderilemedi:", err.message);
+      }
+      console.log(`[Boss] ${boss.name} timeout ile kacti.`);
+    } catch (err) {
+      console.error("[Boss] Timeout kontrol hatasi:", err.message);
+    }
+  }, BOSS_CHECK_INTERVAL);
 
   // 7. Leaderboard otomatik guncelleme (30 dakikada bir)
   const LEADERBOARD_INTERVAL = 30 * 60 * 1000;

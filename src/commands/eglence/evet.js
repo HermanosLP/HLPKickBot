@@ -1,5 +1,6 @@
 const Bet = require("../../models/Bet");
 const UserScore = require("../../models/UserScore");
+const eventBus = require("../../events/EventBus");
 
 const MIN_BET = 150;
 const MAX_TOTAL = 2000;
@@ -54,6 +55,25 @@ async function placeBet(msg, side) {
   );
 
   const newTotal = currentTotal + amount;
+
+  // Event icin guncel toplamlari yeniden oku
+  try {
+    const fresh = await Bet.findById(bet._id);
+    if (fresh) {
+      const t = fresh.totals();
+      eventBus.emit("bet:update", {
+        betId: String(fresh._id),
+        question: fresh.question,
+        closesAt: fresh.closesAt.toISOString(),
+        evet: t.evet,
+        hayır: t.hayır,
+        evetCount: t.evetCount,
+        hayırCount: t.hayırCount,
+        lastBet: { username: msg.username, side, amount },
+      });
+    }
+  } catch (_) {}
+
   return `✅ ${msg.username} "${side}" tarafına ${amount} 🪙 koydu (toplamın: ${newTotal}/${MAX_TOTAL}).`;
 }
 

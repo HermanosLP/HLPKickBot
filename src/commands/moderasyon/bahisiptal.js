@@ -1,6 +1,7 @@
 const Bet = require("../../models/Bet");
 const UserScore = require("../../models/UserScore");
 const { isMod } = require("../../utils/modCheck");
+const eventBus = require("../../events/EventBus");
 
 module.exports = {
   name: "bahisiptal",
@@ -22,6 +23,11 @@ module.exports = {
     bet.status = "cancelled";
     bet.settledAt = new Date();
     await bet.save();
+
+    eventBus.emit("bet:cancel", {
+      betId: String(bet._id),
+      question: bet.question,
+    });
 
     return `❌ Bahis iptal edildi: "${bet.question}" — Tüm coinler iade edildi.`;
   },

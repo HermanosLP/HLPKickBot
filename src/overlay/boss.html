@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<title>HLP Boss Overlay</title>
+<style>
+  :root {
+    --red: #c82828;
+    --red-dark: #6a1010;
+    --accent: #ffb700;
+    --dark: #0b0303;
+    --panel: rgba(12, 4, 4, 0.92);
+    --text: #f5f5f5;
+    --muted: #a0a0a0;
+    --hp-green: #2ea043;
+    --hp-yellow: #eab308;
+    --hp-red: #dc2626;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100vw; height: 100vh;
+    background: transparent;
+    font-family: "Segoe UI", "Arial", sans-serif;
+    color: var(--text);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  #wrap {
+    position: fixed;
+    inset: 0;
+    margin: auto;
+    width: 420px;
+    height: fit-content;
+    max-height: calc(100vh - 40px);
+    background: var(--panel);
+    border: 2px solid var(--boss-color, var(--red));
+    border-radius: 14px;
+    padding: 20px 22px 18px;
+    box-shadow: 0 15px 50px rgba(0,0,0,0.7), 0 0 40px var(--boss-glow, rgba(200,40,40,0.5));
+    opacity: 0;
+    transform: scale(0.85) translateY(-20px);
+    transition: transform 0.6s cubic-bezier(0.34, 1.3, 0.64, 1), opacity 0.5s;
+    backdrop-filter: blur(8px);
+    will-change: transform, opacity;
+  }
+  #wrap.visible {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+
+  #wrap.panic {
+    animation: panicShake 0.15s infinite;
+    border-color: var(--red);
+    box-shadow: 0 15px 50px rgba(0,0,0,0.7), 0 0 60px rgba(255,0,0,0.8);
+  }
+  #wrap.panic::before {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    border: 2px solid #ff3333;
+    border-radius: 14px;
+    animation: panicFlicker 0.25s infinite;
+    pointer-events: none;
+  }
+  @keyframes panicShake {
+    0%,100% { transform: scale(1) translateX(0) translateY(0); }
+    25% { transform: scale(1) translateX(-2px) translateY(1px); }
+    75% { transform: scale(1) translateX(2px) translateY(-1px); }
+  }
+  @keyframes panicFlicker {
+    0%,100% { opacity: 0.7; }
+    50% { opacity: 0.2; }
+  }
+
+  #header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    font-size: 11px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 700;
+  }
+  #tier { color: var(--accent); }
+  #timer {
+    font-size: 16px;
+    font-variant-numeric: tabular-nums;
+  }
+  #timer.warn { color: #ff7b00; }
+  #timer.danger { color: var(--red); animation: timerPulse 0.8s infinite; }
+  @keyframes timerPulse {
+    0%,100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  #bossRow {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 14px;
+  }
+
+  #sprite {
+    font-size: 96px;
+    line-height: 1;
+    filter: drop-shadow(0 0 18px var(--boss-glow, rgba(200,40,40,0.8)));
+    animation: idleBreathe 2.4s ease-in-out infinite;
+    transform-origin: center bottom;
+    will-change: transform, filter;
+  }
+  #sprite.hit {
+    animation: hitShake 0.35s;
+  }
+  #sprite.crit {
+    animation: critShake 0.5s;
+  }
+  #sprite.panic {
+    animation: panicBreathe 0.8s ease-in-out infinite;
+    filter: drop-shadow(0 0 25px #ff0000) hue-rotate(-20deg) saturate(1.5);
+  }
+  #sprite.dead {
+    animation: death 1s forwards;
+  }
+  #sprite.escaped {
+    animation: escape 1s forwards;
+  }
+
+  @keyframes idleBreathe {
+    0%,100% { transform: scale(1); }
+    50% { transform: scale(1.04); }
+  }
+  @keyframes panicBreathe {
+    0%,100% { transform: scale(1.08) translateX(0); }
+    25% { transform: scale(1.12) translateX(-3px); }
+    75% { transform: scale(1.12) translateX(3px); }
+  }
+  @keyframes hitShake {
+    0% { transform: translateX(0) scale(1); filter: drop-shadow(0 0 18px var(--boss-glow, rgba(200,40,40,0.8))); }
+    15% { transform: translateX(-8px) scale(1.05); filter: drop-shadow(0 0 30px #ff4444) brightness(1.5); }
+    30% { transform: translateX(6px) scale(1.02); }
+    50% { transform: translateX(-4px); }
+    70% { transform: translateX(3px); }
+    100% { transform: translateX(0) scale(1); }
+  }
+  @keyframes critShake {
+    0% { transform: translateX(0) scale(1) rotate(0); }
+    10% { transform: translateX(-14px) scale(1.15) rotate(-5deg); filter: drop-shadow(0 0 40px #ffcc00) brightness(2); }
+    25% { transform: translateX(12px) scale(1.1) rotate(4deg); }
+    40% { transform: translateX(-8px) scale(1.05) rotate(-2deg); }
+    60% { transform: translateX(5px) rotate(1deg); }
+    80% { transform: translateX(-2px); }
+    100% { transform: translateX(0) scale(1) rotate(0); }
+  }
+  @keyframes death {
+    0% { transform: scale(1); filter: brightness(1); opacity: 1; }
+    30% { transform: scale(1.6) rotate(15deg); filter: brightness(3) drop-shadow(0 0 60px #ff3300); opacity: 1; }
+    60% { transform: scale(0.3) rotate(-30deg); filter: brightness(0.5); opacity: 0.6; }
+    100% { transform: scale(0) rotate(180deg); opacity: 0; }
+  }
+  @keyframes escape {
+    0% { transform: translateX(0) scale(1); opacity: 1; }
+    100% { transform: translateX(300px) scale(0.5); opacity: 0; filter: blur(8px); }
+  }
+
+  #info {
+    flex: 1;
+    min-width: 0;
+  }
+  #bossName {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--boss-color, #fff);
+    text-shadow: 0 0 12px var(--boss-glow, rgba(200,40,40,0.6));
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  #hpLabel {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 4px;
+    font-variant-numeric: tabular-nums;
+  }
+  #hpLabel .val {
+    color: #fff;
+    font-weight: 700;
+  }
+
+  .hp-bg {
+    width: 100%;
+    height: 18px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 9px;
+    overflow: hidden;
+    position: relative;
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+  .hp-fill {
+    height: 100%;
+    width: 100%;
+    border-radius: 9px;
+    background: linear-gradient(90deg, var(--hp-red), var(--hp-yellow), var(--hp-green));
+    background-size: 300% 100%;
+    background-position: 100% 0;
+    transition: width 0.6s cubic-bezier(0.25, 0.8, 0.25, 1), background-position 0.6s;
+    position: relative;
+  }
+  .hp-fill.hit::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: rgba(255,255,255,0.7);
+    animation: hpFlash 0.4s ease-out;
+  }
+  @keyframes hpFlash {
+    from { opacity: 1; }
+    to   { opacity: 0; }
+  }
+
+  #stats {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  #stats .val { color: #fff; font-weight: 700; }
+  #stats .accent { color: var(--accent); }
+  #attackerCount.warn { color: #ff9900; animation: pulseSoft 1.2s infinite; }
+  @keyframes pulseSoft {
+    0%,100% { opacity: 1; }
+    50% { opacity: 0.6; }
+  }
+
+  #recent {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    min-height: 70px;
+  }
+  #recent .title {
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .hit-line {
+    font-size: 12px;
+    line-height: 1.5;
+    animation: hitSlide 0.4s;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .hit-line .u { color: var(--accent); font-weight: 700; }
+  .hit-line .d { color: #fff; font-weight: 700; }
+  .hit-line.crit .d { color: #ffdd00; text-shadow: 0 0 6px #ff9900; }
+  .hit-line.crit::before { content: "💥 "; }
+  .hit-line:not(.crit)::before { content: "⚔️ "; opacity: 0.7; }
+  @keyframes hitSlide {
+    from { transform: translateX(-10px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+
+  /* Cmd hint */
+  #cmdhint {
+    margin-top: 10px;
+    font-size: 11px;
+    color: var(--muted);
+    text-align: center;
+    letter-spacing: 1px;
+  }
+  #cmdhint .cmd { color: var(--accent); font-weight: 700; }
+
+  /* Defeat ekrani */
+  #result {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at center, rgba(15,5,5,0.97), rgba(0,0,0,0.98));
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.6s;
+  }
+  #result.visible { opacity: 1; }
+  #result .trophy {
+    font-size: 72px;
+    margin-bottom: 8px;
+    filter: drop-shadow(0 0 20px var(--accent));
+    animation: trophyBounce 0.8s;
+  }
+  @keyframes trophyBounce {
+    0% { transform: scale(0) rotate(-180deg); }
+    60% { transform: scale(1.3) rotate(20deg); }
+    100% { transform: scale(1) rotate(0); }
+  }
+  #result .title {
+    font-size: 12px;
+    letter-spacing: 4px;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  #result .headline {
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+    color: #fff;
+    text-shadow: 0 0 20px var(--boss-color, var(--red));
+  }
+  #result .pot {
+    font-size: 14px;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+  #result .pot .val { color: var(--accent); font-weight: 700; font-size: 18px; }
+  #result .top {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  #result .top .row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 14px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 8px;
+    font-size: 13px;
+  }
+  #result .top .row.r1 { border-left: 4px solid #ffd700; }
+  #result .top .row.r2 { border-left: 4px solid #c0c0c0; }
+  #result .top .row.r3 { border-left: 4px solid #cd7f32; }
+  #result .top .row .u { font-weight: 700; color: #fff; }
+  #result .top .row .r { color: var(--accent); font-weight: 700; }
+</style>
+</head>
+<body>
+  <div id="wrap">
+    <div id="header">
+      <div id="tier">Tier <span data-bind="tier">?</span></div>
+      <div id="timer">--:--</div>
+    </div>
+
+    <div id="bossRow">
+      <div id="sprite" data-bind="sprite">?</div>
+      <div id="info">
+        <div id="bossName" data-bind="name">—</div>
+        <div id="hpLabel">
+          <span class="val" data-bind="hp-current">0</span> /
+          <span data-bind="hp-max">0</span> HP
+        </div>
+        <div class="hp-bg"><div class="hp-fill" data-bind="hp-bar"></div></div>
+      </div>
+    </div>
+
+    <div id="stats">
+      <div>
+        <span id="attackerCount">
+          <span class="val" data-bind="attackers">0</span>
+          <span data-bind="attackers-suffix">/0</span>
+        </span>
+        <span class="accent"> savaşçı</span>
+      </div>
+      <div>
+        <span class="val accent" data-bind="pot">0</span> 🪙 havuz
+      </div>
+    </div>
+
+    <div id="recent">
+      <div class="title">Son Saldırılar</div>
+      <div id="recentList"></div>
+    </div>
+
+    <div id="cmdhint">
+      <span class="cmd">!saldır &lt;coin&gt;</span> · min <span data-bind="min-coins">?</span> / max <span data-bind="max-coins">?</span>
+    </div>
+
+    <div id="result">
+      <div class="trophy" data-bind="result-icon">🏆</div>
+      <div class="title" data-bind="result-title">Öldürüldü</div>
+      <div class="headline" data-bind="result-headline">—</div>
+      <div class="pot">Pot: <span class="val" data-bind="result-pot">0</span> 🪙</div>
+      <div class="top" id="resultTop"></div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const $ = (name) => document.querySelector(`[data-bind="${name}"]`);
+  const wrap = document.getElementById("wrap");
+  const sprite = document.getElementById("sprite");
+  const hpFill = $("hp-bar");
+  const timer = document.getElementById("timer");
+  const result = document.getElementById("result");
+  const recentList = document.getElementById("recentList");
+  const attackerCount = document.getElementById("attackerCount");
+  const resultTop = document.getElementById("resultTop");
+
+  let currentBossId = null;
+  let expiresAt = null;
+  let tickInterval = null;
+  let hideTimeout = null;
+  let maxHp = 0;
+
+  function setColors(color) {
+    const c = color || "#c82828";
+    wrap.style.setProperty("--boss-color", c);
+    wrap.style.setProperty("--boss-glow", hexToRgba(c, 0.6));
+  }
+
+  function hexToRgba(hex, a) {
+    const h = hex.replace("#", "");
+    const r = parseInt(h.substring(0,2), 16);
+    const g = parseInt(h.substring(2,4), 16);
+    const b = parseInt(h.substring(4,6), 16);
+    return `rgba(${r},${g},${b},${a})`;
+  }
+
+  function show() {
+    if (hideTimeout) { clearTimeout(hideTimeout); hideTimeout = null; }
+    wrap.classList.add("visible");
+  }
+  function hide(delay = 0) {
+    if (hideTimeout) clearTimeout(hideTimeout);
+    hideTimeout = setTimeout(() => {
+      wrap.classList.remove("visible");
+      wrap.classList.remove("panic");
+      sprite.className = "";
+      result.classList.remove("visible");
+      stopTimer();
+      currentBossId = null;
+    }, delay);
+  }
+
+  function startTimer(expiresIso) {
+    expiresAt = new Date(expiresIso).getTime();
+    stopTimer();
+    tickTimer();
+    tickInterval = setInterval(tickTimer, 500);
+  }
+  function stopTimer() {
+    if (tickInterval) clearInterval(tickInterval);
+    tickInterval = null;
+  }
+  function tickTimer() {
+    if (!expiresAt) return;
+    const diff = Math.max(0, expiresAt - Date.now());
+    const mm = Math.floor(diff / 60000);
+    const ss = Math.floor((diff % 60000) / 1000);
+    timer.textContent = `${String(mm).padStart(2,"0")}:${String(ss).padStart(2,"0")}`;
+    timer.classList.remove("warn", "danger");
+    if (diff <= 30000) timer.classList.add("danger");
+    else if (diff <= 60000) timer.classList.add("warn");
+    if (diff <= 0) stopTimer();
+  }
+
+  function setHp(current, max) {
+    const pct = max > 0 ? Math.max(0, (current / max) * 100) : 0;
+    hpFill.style.width = `${pct}%`;
+    hpFill.style.backgroundPosition = `${100 - pct}% 0`;
+    $("hp-current").textContent = fmt(current);
+    $("hp-max").textContent = fmt(max);
+  }
+
+  function flashHit(crit) {
+    hpFill.classList.remove("hit");
+    void hpFill.offsetWidth;
+    hpFill.classList.add("hit");
+
+    sprite.classList.remove("hit", "crit");
+    void sprite.offsetWidth;
+    sprite.classList.add(crit ? "crit" : "hit");
+  }
+
+  function setAttackers(count, min) {
+    $("attackers").textContent = count;
+    $("attackers-suffix").textContent = `/${min}`;
+    if (count < min) {
+      attackerCount.classList.add("warn");
+    } else {
+      attackerCount.classList.remove("warn");
+    }
+  }
+
+  function addRecentHit(attacker) {
+    const el = document.createElement("div");
+    el.className = "hit-line" + (attacker.crit ? " crit" : "");
+    el.innerHTML = `<span class="u">@${escapeHtml(attacker.username)}</span> → <span class="d">${attacker.damage}</span> hasar`;
+    recentList.insertBefore(el, recentList.firstChild);
+    while (recentList.children.length > 3) {
+      recentList.removeChild(recentList.lastChild);
+    }
+  }
+
+  function setPanic(on) {
+    if (on) {
+      wrap.classList.add("panic");
+      sprite.classList.add("panic");
+    } else {
+      wrap.classList.remove("panic");
+      sprite.classList.remove("panic");
+    }
+  }
+
+  function fmt(n) {
+    return (Math.round(n) || 0).toLocaleString("tr-TR");
+  }
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    })[c]);
+  }
+
+  // Event handlers
+  const handlers = {
+    "boss:spawn": (d) => {
+      currentBossId = d.bossId;
+      maxHp = d.maxHp;
+      setColors(d.color);
+      sprite.className = "";
+      sprite.textContent = d.image ? "" : (d.emoji || "?");
+      if (d.image) {
+        sprite.innerHTML = `<img src="${escapeHtml(d.image)}" style="width:96px;height:96px;object-fit:contain;" />`;
+      }
+      $("name").textContent = d.name || "?";
+      $("tier").textContent = d.tier || "?";
+      $("min-coins").textContent = d.minCoinsPerAttack;
+      $("max-coins").textContent = d.maxCoinsPerAttack;
+      setHp(d.maxHp, d.maxHp);
+      setAttackers(0, d.minUniqueAttackers);
+      $("pot").textContent = "0";
+      recentList.innerHTML = "";
+      result.classList.remove("visible");
+      setPanic(false);
+      startTimer(d.expiresAt);
+      show();
+    },
+    "boss:attack": (d) => {
+      if (currentBossId && d.bossId !== currentBossId) return;
+      currentBossId = d.bossId || currentBossId;
+      setHp(d.currentHp, d.maxHp);
+      setAttackers(d.uniqueAttackers, d.minAttackers);
+      $("pot").textContent = fmt(Math.floor(d.totalCoins * 1.5));
+      if (d.attacker) {
+        flashHit(d.attacker.crit);
+        addRecentHit(d.attacker);
+      }
+      if (d.panicMode) setPanic(true);
+      show();
+    },
+    "boss:defeat": (d) => {
+      if (currentBossId && d.bossId !== currentBossId) return;
+      setPanic(false);
+      sprite.classList.remove("hit", "crit", "panic");
+      void sprite.offsetWidth;
+      sprite.classList.add("dead");
+      stopTimer();
+
+      setTimeout(() => {
+        $("result-icon").textContent = "🏆";
+        result.querySelector(".title").textContent = "Öldürüldü";
+        $("result-headline").textContent = `${(d.name || "").toUpperCase()} DEFEATED`;
+        $("result-pot").textContent = fmt(d.totalPot);
+        resultTop.innerHTML = "";
+        for (const t of (d.topThree || [])) {
+          const row = document.createElement("div");
+          row.className = `row r${t.rank}`;
+          const medal = ["🥇","🥈","🥉"][t.rank-1];
+          row.innerHTML = `<span class="u">${medal} @${escapeHtml(t.username)}</span><span class="r">+${fmt(t.reward)} 🪙</span>`;
+          resultTop.appendChild(row);
+        }
+        result.classList.add("visible");
+      }, 800);
+
+      hide(10000);
+      currentBossId = null;
+    },
+    "boss:expire": (d) => {
+      if (currentBossId && d.bossId !== currentBossId) return;
+      setPanic(false);
+      sprite.classList.remove("hit", "crit", "panic");
+      void sprite.offsetWidth;
+      sprite.classList.add("escaped");
+      stopTimer();
+
+      setTimeout(() => {
+        $("result-icon").textContent = "💨";
+        result.querySelector(".title").textContent = "Kaçtı";
+        $("result-headline").textContent = `${(d.name || "").toUpperCase()} ESCAPED`;
+        $("result-pot").textContent = "—";
+        resultTop.innerHTML = `
+          <div class="row" style="justify-content:center;color:var(--muted)">
+            ${d.uniqueAttackers || 0} savaşçı · toplam ${fmt(d.totalDamage || 0)} hasar
+          </div>
+          <div class="row" style="justify-content:center;font-size:12px;color:var(--muted)">
+            Katılımcılara +${d.consolationXP || 0} XP teselli
+          </div>
+        `;
+        result.classList.add("visible");
+      }, 800);
+
+      hide(7000);
+      currentBossId = null;
+    },
+  };
+
+  // Initial state: sayfa yuklendiginde aktif boss varsa yukle
+  async function loadCurrent() {
+    try {
+      const res = await fetch("/api/boss/current");
+      const data = await res.json();
+      if (data.active) {
+        currentBossId = data.bossId;
+        maxHp = data.maxHp;
+        setColors(data.color);
+        sprite.className = "";
+        sprite.textContent = data.emoji || "?";
+        if (data.image) {
+          sprite.innerHTML = `<img src="${escapeHtml(data.image)}" style="width:96px;height:96px;object-fit:contain;" />`;
+        }
+        $("name").textContent = data.name || "?";
+        $("tier").textContent = data.tier || "?";
+        $("min-coins").textContent = data.minCoinsPerAttack;
+        $("max-coins").textContent = data.maxCoinsPerAttack;
+        setHp(data.currentHp, data.maxHp);
+        setAttackers(data.uniqueAttackers || 0, data.minUniqueAttackers);
+        $("pot").textContent = fmt(Math.floor((data.totalCoins || 0) * 1.5));
+        const panic = data.currentHp / data.maxHp < 0.20;
+        if (panic) setPanic(true);
+        startTimer(data.expiresAt);
+        show();
+      }
+    } catch (err) {
+      console.warn("[Boss] Initial state yuklenemedi:", err);
+    }
+  }
+
+  // WebSocket
+  let ws = null;
+  let reconnectDelay = 1000;
+
+  function connect() {
+    const proto = location.protocol === "https:" ? "wss:" : "ws:";
+    const host = location.host || "localhost:3000";
+    const url = `${proto}//${host}/events`;
+
+    ws = new WebSocket(url);
+
+    ws.addEventListener("open", () => {
+      reconnectDelay = 1000;
+      loadCurrent();
+    });
+
+    ws.addEventListener("message", (evt) => {
+      try {
+        const { type, data } = JSON.parse(evt.data);
+        const fn = handlers[type];
+        if (fn) fn(data || {});
+      } catch (err) {
+        console.warn("[WS] Parse hatasi:", err);
+      }
+    });
+
+    ws.addEventListener("close", () => {
+      setTimeout(connect, reconnectDelay);
+      reconnectDelay = Math.min(reconnectDelay * 1.5, 15000);
+    });
+
+    ws.addEventListener("error", () => {
+      try { ws.close(); } catch (_) {}
+    });
+  }
+
+  connect();
+})();
+</script>
+</body>
+</html>
